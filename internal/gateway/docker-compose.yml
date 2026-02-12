@@ -1,0 +1,29 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy-atc
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-atc-caddyfile:/etc/caddy:ro
+      - caddy-atc-data:/data
+      - caddy-atc-config:/config
+    networks:
+      - caddy-atc
+
+networks:
+  caddy-atc:
+    external: true
+
+volumes:
+  caddy-atc-caddyfile:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${CADDY_ATC_HOME}/caddyfile
+  caddy-atc-data:
+  caddy-atc-config:
