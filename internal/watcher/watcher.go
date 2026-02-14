@@ -134,7 +134,7 @@ func (w *Watcher) handleContainerStart(ctx context.Context, containerID string) 
 	// Detect HTTP port
 	port := DetectHTTPPort(info)
 	if port == "" {
-		w.logger.Printf("No HTTP port detected for %s/%s, skipping", composeProject, composeService)
+		w.logger.Printf("No HTTP port detected for %s/%s, skipping (hint: add EXPOSE <port> to the Dockerfile or label caddy-atc.port=<port> in docker-compose.yml)", composeProject, composeService)
 		return
 	}
 
@@ -229,6 +229,7 @@ func (w *Watcher) scanExisting(ctx context.Context) error {
 
 		port := DetectHTTPPort(info)
 		if port == "" {
+			w.logger.Printf("No HTTP port detected for %s/%s, skipping (hint: add EXPOSE <port> to the Dockerfile or label caddy-atc.port=<port> in docker-compose.yml)", composeProject, composeService)
 			continue
 		}
 
