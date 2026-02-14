@@ -121,6 +121,70 @@ func TestGenerateCaddyfile_RejectsInvalidContainerName(t *testing.T) {
 	}
 }
 
+func TestGenerateCaddyfile_DuplicateHostnames_Combined(t *testing.T) {
+	routes := NewActiveRoutes()
+	routes.Add("c1", &Route{
+		Hostname:      "worker.localhost",
+		ContainerName: "worker-1",
+		Port:          "8000",
+	})
+	routes.Add("c2", &Route{
+		Hostname:      "worker.localhost",
+		ContainerName: "worker-2",
+		Port:          "8000",
+	})
+	routes.Add("c3", &Route{
+		Hostname:      "worker.localhost",
+		ContainerName: "worker-3",
+		Port:          "8000",
+	})
+
+	got, err := GenerateCaddyfile(routes)
+	if err != nil {
+		t.Fatalf("GenerateCaddyfile() error = %v", err)
+	}
+
+	// Should have exactly one site block for worker.localhost
+	if count := strings.Count(got, "worker.localhost {"); count != 1 {
+		t.Errorf("expected 1 site block for worker.localhost, got %d\n%s", count, got)
+	}
+
+	// The reverse_proxy line should contain all three upstreams
+	if !strings.Contains(got, "worker-1:8000") {
+		t.Error("expected worker-1:8000 in reverse_proxy")
+	}
+	if !strings.Contains(got, "worker-2:8000") {
+		t.Error("expected worker-2:8000 in reverse_proxy")
+	}
+	if !strings.Contains(got, "worker-3:8000") {
+		t.Error("expected worker-3:8000 in reverse_proxy")
+	}
+
+	// Should have exactly one reverse_proxy directive
+	if count := strings.Count(got, "reverse_proxy"); count != 1 {
+		t.Errorf("expected 1 reverse_proxy directive, got %d\n%s", count, got)
+	}
+}
+
+func TestGenerateCaddyfile_DuplicateHostnames_RejectsInvalidUpstream(t *testing.T) {
+	routes := NewActiveRoutes()
+	routes.Add("c1", &Route{
+		Hostname:      "worker.localhost",
+		ContainerName: "worker-1",
+		Port:          "8000",
+	})
+	routes.Add("c2", &Route{
+		Hostname:      "worker.localhost",
+		ContainerName: "bad container",
+		Port:          "8000",
+	})
+
+	_, err := GenerateCaddyfile(routes)
+	if err == nil {
+		t.Error("expected error for invalid container name in grouped upstreams")
+	}
+}
+
 func TestActiveRoutes_AddGetRemove(t *testing.T) {
 	ar := NewActiveRoutes()
 
