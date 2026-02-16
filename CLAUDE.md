@@ -31,6 +31,10 @@ internal/
   adopt/                    Project adoption
     adopt.go                Adopt/unadopt workflows
     detect.go               Compose file + Dockerfile scanning for HTTP services
+  start/                    Port-conflict-free project launching
+    strip.go                YAML port stripping (yaml.v3 Node API)
+    compose.go              Compose file detection, stripped file generation
+    start.go                Start/stop orchestration (auto-adopt, exec)
   config/                   Configuration
     config.go               Paths, validation, config load/save, file locking
   routes/                   Status queries

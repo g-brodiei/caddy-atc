@@ -53,7 +53,22 @@ docker compose up -d
 | `caddy-atc status` | Show gateway health and active routes |
 | `caddy-atc routes` | List all active routes |
 | `caddy-atc trust` | Install Caddy's root CA in system trust store |
+| `caddy-atc start [dir] [-- cmd]` | Start project with ports stripped |
+| `caddy-atc stop [dir]` | Stop project and clean up stripped files |
 | `caddy-atc logs [-f]` | Show (or follow) watcher logs |
+
+### Starting Projects
+
+Use `caddy-atc start` to run multiple projects simultaneously without port conflicts:
+
+```bash
+caddy-atc start                              # docker compose up -d (default)
+caddy-atc start -- ./scripts/dev.sh          # custom start script
+caddy-atc start --keep-ports db,redis        # keep host ports for specific services
+caddy-atc stop                               # stop and clean up
+```
+
+This strips all host port bindings from the compose file and sets `COMPOSE_FILE` so any `docker compose` calls in your script use the stripped version. Add `.caddy-atc-compose*.yml` to your `.gitignore`.
 
 ### Adopt Options
 
