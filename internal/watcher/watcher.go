@@ -297,28 +297,73 @@ func (w *Watcher) reloadRoutes(ctx context.Context) error {
 		return fmt.Errorf("writing Caddyfile: %w", err)
 	}
 
-	// Ensure gateway container is running before attempting reload
-	running, err := gateway.IsRunning(ctx)
-	if err != nil {
-		return fmt.Errorf("checking gateway: %w", err)
+	// Try reload directly (fast path when gateway is already running)
+	err := ReloadCaddy(ctx)
+	if err == nil {
+		return nil
 	}
-	if !running {
-		w.logger.Println("Gateway container not running, starting it...")
+
+	// Only recover if the failure is due to the container being stopped;
+	// other errors (bad Caddyfile syntax, etc.) should surface immediately.
+	if !isContainerStoppedErr(err) {
+		return fmt.Errorf("reloading Caddy: %w", err)
+	}
+
+	// Gateway container is stopped or unresponsive — restart it.
+	// A plain Up() is insufficient: the Docker API may report the container as
+	// "running" (zombie state after WSL2 sleep/hibernate) while exec fails.
+	// Restart handles both truly-stopped and zombie containers.
+	w.logger.Println("Gateway container not responding, restarting...")
+	if restartErr := gateway.Restart(ctx); restartErr != nil {
+		// Container may not exist at all — fall back to creating it
+		w.logger.Printf("Restart failed (%v), starting gateway from scratch...", restartErr)
 		if err := gateway.Up(ctx); err != nil {
 			return fmt.Errorf("starting gateway: %w", err)
 		}
-		// Brief pause for Caddy to finish initializing inside the container
-		select {
-		case <-time.After(2 * time.Second):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	}
+
+	if err := w.waitForGatewayReady(ctx); err != nil {
+		return fmt.Errorf("waiting for gateway: %w", err)
 	}
 
 	if err := ReloadCaddy(ctx); err != nil {
 		return fmt.Errorf("reloading Caddy: %w", err)
 	}
 	return nil
+}
+
+// waitForGatewayReady polls until the gateway container is running, then
+// pauses briefly for Caddy to finish initializing inside the container.
+func (w *Watcher) waitForGatewayReady(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	for {
+		info, err := w.cli.ContainerInspect(ctx, gateway.ContainerName)
+		if err == nil && info.State != nil && info.State.Running {
+			// Container is running; give Caddy a moment to bind its listener
+			select {
+			case <-time.After(time.Second):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			return nil
+		}
+
+		select {
+		case <-time.After(500 * time.Millisecond):
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for gateway container to start")
+		}
+	}
+}
+
+// isContainerStoppedErr returns true when the error indicates docker exec
+// failed because the target container is not running.
+func isContainerStoppedErr(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "stopped state") ||
+		strings.Contains(msg, "is not running")
 }
 
 func shortID(id string) string {

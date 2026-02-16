@@ -1,6 +1,7 @@
 package adopt
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -91,9 +92,10 @@ func ScanComposeFile(dir string) ([]ComposeService, error) {
 		return nil, fmt.Errorf("parsing %s: %w", composePath, err)
 	}
 
+	composeDir := filepath.Dir(composePath)
 	var services []ComposeService
 	for name, svc := range cf.Services {
-		cs := analyzeService(name, svc)
+		cs := analyzeService(name, svc, composeDir)
 		services = append(services, cs)
 	}
 
@@ -120,7 +122,7 @@ func findComposeFile(dir string) string {
 	return ""
 }
 
-func analyzeService(name string, svc composeServiceDef) ComposeService {
+func analyzeService(name string, svc composeServiceDef, composeDir string) ComposeService {
 	cs := ComposeService{Name: name, Image: svc.Image}
 
 	// Collect all ports (from ports and expose directives)
@@ -132,6 +134,16 @@ func analyzeService(name string, svc composeServiceDef) ComposeService {
 	}
 	for _, p := range svc.Expose {
 		cs.Ports = append(cs.Ports, p)
+	}
+
+	// Also scan Dockerfile for EXPOSE directives when the service has a
+	// build context but no ports declared in the compose file.
+	if len(cs.Ports) == 0 {
+		if bc := parseBuildConfig(svc.Build); bc != nil {
+			contextDir := filepath.Join(composeDir, bc.Context)
+			dockerfilePath := filepath.Join(contextDir, bc.Dockerfile)
+			cs.Ports = append(cs.Ports, scanDockerfileExpose(dockerfilePath)...)
+		}
 	}
 
 	// Check by image name first
@@ -212,4 +224,58 @@ func extractImageBase(image string) string {
 	// Remove tag
 	name = strings.Split(name, ":")[0]
 	return name
+}
+
+// buildConfig holds the resolved build context and Dockerfile path.
+type buildConfig struct {
+	Context    string
+	Dockerfile string
+}
+
+// parseBuildConfig extracts the build configuration from the raw yaml value.
+// The build field can be a string (context path) or a map with context/dockerfile keys.
+func parseBuildConfig(raw any) *buildConfig {
+	if raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case string:
+		return &buildConfig{Context: v, Dockerfile: "Dockerfile"}
+	case map[string]any:
+		bc := &buildConfig{Context: ".", Dockerfile: "Dockerfile"}
+		if ctx, ok := v["context"].(string); ok {
+			bc.Context = ctx
+		}
+		if df, ok := v["dockerfile"].(string); ok {
+			bc.Dockerfile = df
+		}
+		return bc
+	}
+	return nil
+}
+
+// scanDockerfileExpose reads a Dockerfile and returns ports from EXPOSE directives.
+func scanDockerfileExpose(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var ports []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		upper := strings.ToUpper(line)
+		if !strings.HasPrefix(upper, "EXPOSE ") {
+			continue
+		}
+		for _, field := range strings.Fields(line)[1:] {
+			port := strings.Split(field, "/")[0] // strip /tcp, /udp
+			if _, err := strconv.Atoi(port); err == nil {
+				ports = append(ports, port)
+			}
+		}
+	}
+	return ports
 }

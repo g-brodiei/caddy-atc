@@ -101,14 +101,53 @@ func installCertWSL(certPath string) error {
 		fmt.Printf("Warning: Linux trust store install failed: %v\n", err)
 	}
 
-	fmt.Println("\nFor Windows browsers, also install the cert on the Windows side:")
-	fmt.Printf("  1. Copy the cert: cp %s /mnt/c/Users/<your-user>/caddy-atc-root-ca.crt\n", certPath)
-	fmt.Println("  2. Open the .crt file in Windows and click 'Install Certificate'")
-	fmt.Println("  3. Choose 'Local Machine' -> 'Trusted Root Certification Authorities'")
-	fmt.Println("\n  Or use PowerShell (admin):")
-	fmt.Println("  Import-Certificate -FilePath C:\\Users\\<your-user>\\caddy-atc-root-ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root")
+	// Resolve Windows user home if possible (for copy-paste ready commands)
+	winUser := detectWindowsUser()
+	userPlaceholder := "<your-windows-username>"
+	if winUser != "" {
+		userPlaceholder = winUser
+	}
+	winCertPath := fmt.Sprintf("C:\\Users\\%s\\caddy-atc-root-ca.crt", userPlaceholder)
+	wslCertDest := fmt.Sprintf("/mnt/c/Users/%s/caddy-atc-root-ca.crt", userPlaceholder)
+
+	fmt.Println()
+	fmt.Println("Windows browsers (Chrome, Edge) use the Windows certificate store, not Linux's.")
+	fmt.Println("To trust *.localhost certificates in your browser, install the CA cert on Windows:")
+	fmt.Println()
+	fmt.Println("Step 1 — Copy the certificate to the Windows filesystem:")
+	fmt.Println()
+	fmt.Printf("  cp %s %s\n", certPath, wslCertDest)
+	fmt.Println()
+	fmt.Println("Step 2 — Import into the Windows Trusted Root Certification Authorities store.")
+	fmt.Println("         Run this from WSL (will open a Windows UAC prompt):")
+	fmt.Println()
+	fmt.Printf("  certutil.exe -addstore Root %s\n", winCertPath)
+	fmt.Println()
+	fmt.Println("After importing, restart your browser for the change to take effect.")
 
 	return nil
+}
+
+// detectWindowsUser tries to find the Windows username for WSL instructions.
+func detectWindowsUser() string {
+	entries, err := os.ReadDir("/mnt/c/Users")
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// Skip well-known system directories
+		switch strings.ToLower(name) {
+		case "public", "default", "default user", "all users":
+			continue
+		}
+		// First real user directory is likely the one
+		return name
+	}
+	return ""
 }
 
 func isWSL() bool {

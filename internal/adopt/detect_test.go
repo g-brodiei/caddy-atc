@@ -57,7 +57,7 @@ func TestExtractImageBase(t *testing.T) {
 
 func TestAnalyzeService_CaddyImage(t *testing.T) {
 	svc := composeServiceDef{Image: "caddy:2-alpine"}
-	cs := analyzeService("web", svc)
+	cs := analyzeService("web", svc, "")
 	if !cs.IsHTTP {
 		t.Error("expected caddy image to be detected as HTTP")
 	}
@@ -71,7 +71,7 @@ func TestAnalyzeService_PostgresImage(t *testing.T) {
 		Image: "postgres:16",
 		Ports: []string{"5432:5432"},
 	}
-	cs := analyzeService("db", svc)
+	cs := analyzeService("db", svc, "")
 	if cs.IsHTTP {
 		t.Error("postgres image should not be detected as HTTP")
 	}
@@ -82,7 +82,7 @@ func TestAnalyzeService_BuildWithPort(t *testing.T) {
 		Build: ".",
 		Ports: []string{"3000:3000"},
 	}
-	cs := analyzeService("app", svc)
+	cs := analyzeService("app", svc, "")
 	if !cs.IsHTTP {
 		t.Error("build context with port should be detected as HTTP")
 	}
@@ -93,7 +93,7 @@ func TestAnalyzeService_BuildWithPort(t *testing.T) {
 
 func TestAnalyzeService_NoPorts(t *testing.T) {
 	svc := composeServiceDef{Image: "busybox"}
-	cs := analyzeService("worker", svc)
+	cs := analyzeService("worker", svc, "")
 	if cs.IsHTTP {
 		t.Error("service with no ports should not be detected as HTTP")
 	}
@@ -105,7 +105,7 @@ func TestAnalyzeService_NonHTTPServiceName(t *testing.T) {
 		Image: "custom-image",
 		Ports: []string{"80:80"},
 	}
-	cs := analyzeService("redis", svc)
+	cs := analyzeService("redis", svc, "")
 	if cs.IsHTTP {
 		t.Error("service named 'redis' should not be detected as HTTP")
 	}
@@ -116,7 +116,7 @@ func TestAnalyzeService_UnknownImageWithHTTPPort(t *testing.T) {
 		Image: "myapp:latest",
 		Ports: []string{"8080:8080"},
 	}
-	cs := analyzeService("api", svc)
+	cs := analyzeService("api", svc, "")
 	if !cs.IsHTTP {
 		t.Error("service with known HTTP port should be detected as HTTP")
 	}
@@ -130,7 +130,7 @@ func TestAnalyzeService_ExposeDirective(t *testing.T) {
 		Image:  "myapp:latest",
 		Expose: []string{"3000"},
 	}
-	cs := analyzeService("api", svc)
+	cs := analyzeService("api", svc, "")
 	if !cs.IsHTTP {
 		t.Error("service with exposed HTTP port should be detected as HTTP")
 	}
@@ -195,6 +195,91 @@ func TestScanComposeFile_NoFile(t *testing.T) {
 	_, err := ScanComposeFile(tmpDir)
 	if err == nil {
 		t.Error("expected error when no compose file exists")
+	}
+}
+
+func TestScanDockerfileExpose(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []string
+	}{
+		{"single port", "FROM node\nEXPOSE 3000\n", []string{"3000"}},
+		{"port with protocol", "FROM node\nEXPOSE 3000/tcp\n", []string{"3000"}},
+		{"multiple ports", "FROM node\nEXPOSE 3000 8000\n", []string{"3000", "8000"}},
+		{"multi-stage", "FROM node AS builder\nEXPOSE 9999\nFROM alpine\nEXPOSE 80\n", []string{"9999", "80"}},
+		{"no expose", "FROM node\nCMD [\"node\", \"app.js\"]\n", nil},
+		{"lowercase expose", "FROM node\nexpose 3000\n", []string{"3000"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			path := filepath.Join(tmpDir, "Dockerfile")
+			os.WriteFile(path, []byte(tt.content), 0644)
+			got := scanDockerfileExpose(path)
+			if len(got) != len(tt.expected) {
+				t.Fatalf("scanDockerfileExpose() = %v, want %v", got, tt.expected)
+			}
+			for i := range got {
+				if got[i] != tt.expected[i] {
+					t.Errorf("port[%d] = %q, want %q", i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestAnalyzeService_DockerfileExpose(t *testing.T) {
+	// Set up a temp dir with a Dockerfile that has EXPOSE 3000
+	tmpDir := t.TempDir()
+	buildDir := filepath.Join(tmpDir, "frontend")
+	os.MkdirAll(buildDir, 0755)
+	os.WriteFile(filepath.Join(buildDir, "Dockerfile.dev"), []byte("FROM node:18-alpine\nEXPOSE 3000\nCMD [\"npm\", \"start\"]\n"), 0644)
+
+	svc := composeServiceDef{
+		Build: map[string]any{"context": "./frontend", "dockerfile": "Dockerfile.dev"},
+	}
+	cs := analyzeService("frontend-dev", svc, tmpDir)
+	if !cs.IsHTTP {
+		t.Error("service with Dockerfile EXPOSE 3000 should be detected as HTTP")
+	}
+	if cs.Port != "3000" {
+		t.Errorf("Port = %q, want %q", cs.Port, "3000")
+	}
+}
+
+func TestParseBuildConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      any
+		wantNil    bool
+		wantCtx    string
+		wantDocker string
+	}{
+		{"nil", nil, true, "", ""},
+		{"string", "./app", false, "./app", "Dockerfile"},
+		{"map with both", map[string]any{"context": "./frontend", "dockerfile": "Dockerfile.dev"}, false, "./frontend", "Dockerfile.dev"},
+		{"map context only", map[string]any{"context": "./api"}, false, "./api", "Dockerfile"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bc := parseBuildConfig(tt.input)
+			if tt.wantNil {
+				if bc != nil {
+					t.Errorf("expected nil, got %+v", bc)
+				}
+				return
+			}
+			if bc == nil {
+				t.Fatal("expected non-nil buildConfig")
+			}
+			if bc.Context != tt.wantCtx {
+				t.Errorf("Context = %q, want %q", bc.Context, tt.wantCtx)
+			}
+			if bc.Dockerfile != tt.wantDocker {
+				t.Errorf("Dockerfile = %q, want %q", bc.Dockerfile, tt.wantDocker)
+			}
+		})
 	}
 }
 

@@ -143,6 +143,20 @@ func Down(ctx context.Context) error {
 	return nil
 }
 
+// Restart force-restarts the gateway container. This handles the case where
+// the container appears running in the Docker API but is actually unresponsive
+// (common after WSL2 sleep/hibernate).
+func Restart(ctx context.Context) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("connecting to Docker: %w", err)
+	}
+	defer cli.Close()
+
+	timeout := 10
+	return cli.ContainerRestart(ctx, ContainerName, container.StopOptions{Timeout: &timeout})
+}
+
 // IsRunning checks if the gateway is running.
 func IsRunning(ctx context.Context) (bool, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
