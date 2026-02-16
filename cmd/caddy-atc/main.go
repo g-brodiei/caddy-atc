@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -415,7 +416,7 @@ func stopWatcher() {
 		return
 	}
 
-	// Verify it's a caddy-atc process by checking /proc/<pid>/cmdline
+	// Verify it's a caddy-atc process before sending signal
 	if !isCaddyATCProcess(pid) {
 		fmt.Printf("Warning: PID %d is not a caddy-atc process, removing stale PID file\n", pid)
 		os.Remove(config.PidPath())
@@ -454,13 +455,14 @@ func isWatcherRunning() bool {
 	return isCaddyATCProcess(pid)
 }
 
-// isCaddyATCProcess checks /proc/<pid>/cmdline to verify it's a caddy-atc process.
+// isCaddyATCProcess uses `ps` to verify the given PID is a caddy-atc process.
+// Works on both Linux and macOS (POSIX).
 func isCaddyATCProcess(pid int) bool {
-	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "comm=").Output()
 	if err != nil {
-		// Can't read cmdline - could be permission issue; assume it's ours
-		// if the PID file exists and process is alive
-		return true
+		// Process doesn't exist or ps failed — assume it's not ours
+		return false
 	}
-	return strings.Contains(string(cmdline), "caddy-atc")
+	comm := strings.TrimSpace(string(out))
+	return comm == "caddy-atc" || strings.HasSuffix(comm, "/caddy-atc")
 }
