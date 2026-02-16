@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -295,6 +296,25 @@ func (w *Watcher) reloadRoutes(ctx context.Context) error {
 	if err := WriteCaddyfile(w.routes); err != nil {
 		return fmt.Errorf("writing Caddyfile: %w", err)
 	}
+
+	// Ensure gateway container is running before attempting reload
+	running, err := gateway.IsRunning(ctx)
+	if err != nil {
+		return fmt.Errorf("checking gateway: %w", err)
+	}
+	if !running {
+		w.logger.Println("Gateway container not running, starting it...")
+		if err := gateway.Up(ctx); err != nil {
+			return fmt.Errorf("starting gateway: %w", err)
+		}
+		// Brief pause for Caddy to finish initializing inside the container
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	if err := ReloadCaddy(ctx); err != nil {
 		return fmt.Errorf("reloading Caddy: %w", err)
 	}
