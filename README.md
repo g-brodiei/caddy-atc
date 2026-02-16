@@ -10,6 +10,33 @@ frontend.myproject.localhost
 api.other-project.localhost
 ```
 
+## Installation
+
+### Quick install (Linux/macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/g-brodiei/caddy-atc/main/install.sh | sh
+```
+
+Pin a specific version:
+
+```bash
+VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/g-brodiei/caddy-atc/main/install.sh | sh
+```
+
+Pre-built binaries are available on the [Releases page](https://github.com/g-brodiei/caddy-atc/releases).
+
+### From source
+
+Requires Go 1.24+:
+
+```bash
+git clone https://github.com/g-brodiei/caddy-atc.git
+cd caddy-atc
+make build
+# Binary is at ./build/caddy-atc
+```
+
 ## How It Works
 
 1. A single Caddy container (`caddy-atc`) binds ports 80/443 on the host
@@ -121,5 +148,5 @@ Config is stored in `~/.caddy-atc/`:
 ## Requirements
 
 - Docker with Compose V2
-- Go 1.24+ (for building)
-- Linux or WSL2
+- Linux, macOS, or WSL2
+- Go 1.24+ (only needed for building from source)

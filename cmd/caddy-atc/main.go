@@ -22,11 +22,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "caddy-atc",
-		Short: "Local development gateway - route projects by hostname",
-		Long:  "caddy-atc eliminates Docker port conflicts by routing HTTP traffic through a single Caddy gateway using hostname-based routing (project.localhost).",
+		Use:     "caddy-atc",
+		Short:   "Local development gateway - route projects by hostname",
+		Long:    "caddy-atc eliminates Docker port conflicts by routing HTTP traffic through a single Caddy gateway using hostname-based routing (project.localhost).",
+		Version: version,
 	}
 
 	rootCmd.AddCommand(upCmd())

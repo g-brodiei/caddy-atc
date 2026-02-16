@@ -1,0 +1,35 @@
+version: 2
+
+builds:
+  - main: ./cmd/caddy-atc
+    binary: caddy-atc
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "caddy-atc_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+
+release:
+  github:
+    owner: g-brodiei
+    name: caddy-atc
