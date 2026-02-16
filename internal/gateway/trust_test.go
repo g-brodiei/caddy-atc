@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"io"
+	"runtime"
 	"testing"
 )
 
@@ -140,5 +141,38 @@ func TestExtractFromTar_ExactlyMaxSize(t *testing.T) {
 	}
 	if int64(len(got)) != maxBytes {
 		t.Errorf("got %d bytes, want %d", len(got), maxBytes)
+	}
+}
+
+func TestInstallCertDarwin_ReturnsNil(t *testing.T) {
+	// installCertDarwin only prints instructions — no platform-specific APIs.
+	// Safe to test on any OS.
+	err := installCertDarwin("/tmp/fake-cert.crt")
+	if err != nil {
+		t.Errorf("installCertDarwin() returned error: %v", err)
+	}
+}
+
+func TestInstallCertMacOS(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS-only test")
+	}
+	// On macOS, installCert should return nil (prints instructions, no error)
+	err := installCert("/tmp/fake-cert.crt")
+	if err != nil {
+		t.Errorf("installCert() on macOS returned error: %v", err)
+	}
+}
+
+func TestInstallCert_NonLinuxNonDarwin(t *testing.T) {
+	// This test documents that non-Linux, non-Darwin platforms
+	// get the generic fallback message without error.
+	// We can only directly test on the current platform.
+	if runtime.GOOS == "linux" {
+		t.Skip("This test is for non-Linux platforms")
+	}
+	err := installCert("/tmp/fake-cert.crt")
+	if err != nil {
+		t.Errorf("installCert() returned error on %s: %v", runtime.GOOS, err)
 	}
 }

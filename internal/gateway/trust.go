@@ -63,16 +63,28 @@ func Trust(ctx context.Context) error {
 }
 
 func installCert(certPath string) error {
-	if runtime.GOOS != "linux" {
+	switch runtime.GOOS {
+	case "linux":
+		if isWSL() {
+			return installCertWSL(certPath)
+		}
+		return installCertLinux(certPath)
+	case "darwin":
+		return installCertDarwin(certPath)
+	default:
 		fmt.Printf("\nManually install the CA certificate:\n  %s\n", certPath)
 		return nil
 	}
+}
 
-	if isWSL() {
-		return installCertWSL(certPath)
-	}
-
-	return installCertLinux(certPath)
+func installCertDarwin(certPath string) error {
+	fmt.Println()
+	fmt.Println("To trust caddy-atc certificates in your browser, run:")
+	fmt.Println()
+	fmt.Printf("  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s\n", certPath)
+	fmt.Println()
+	fmt.Println("After importing, restart your browser for the change to take effect.")
+	return nil
 }
 
 func installCertLinux(certPath string) error {
