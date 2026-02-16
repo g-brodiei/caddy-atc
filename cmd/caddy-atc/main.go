@@ -16,6 +16,7 @@ import (
 	"github.com/g-brodiei/caddy-atc/internal/config"
 	"github.com/g-brodiei/caddy-atc/internal/gateway"
 	"github.com/g-brodiei/caddy-atc/internal/routes"
+	"github.com/g-brodiei/caddy-atc/internal/start"
 	"github.com/g-brodiei/caddy-atc/internal/watcher"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,8 @@ func main() {
 	rootCmd.AddCommand(routesCmd())
 	rootCmd.AddCommand(trustCmd())
 	rootCmd.AddCommand(logsCmd())
+	rootCmd.AddCommand(startCmd())
+	rootCmd.AddCommand(stopProjectCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -276,6 +279,71 @@ func logsCmd() *cobra.Command {
 
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
 	return cmd
+}
+
+func startCmd() *cobra.Command {
+	var keepPorts string
+
+	cmd := &cobra.Command{
+		Use:   "start [directory] [-- command...]",
+		Short: "Start project with ports stripped (avoids conflicts)",
+		Long: `Strip host port bindings from the project's compose file and run a command.
+
+The stripped compose file is set via COMPOSE_FILE env var, so any docker compose
+calls inside your script transparently use it. The caddy-atc watcher handles
+routing automatically.
+
+Examples:
+  caddy-atc start                          # docker compose up -d (default)
+  caddy-atc start -- ./scripts/dev.sh      # custom command
+  caddy-atc start --keep-ports db,redis    # keep host ports for db and redis`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+
+			dir := "."
+			var userCmd []string
+
+			dashIdx := cmd.ArgsLenAtDash()
+			if dashIdx >= 0 {
+				if dashIdx > 0 {
+					dir = args[0]
+				}
+				userCmd = args[dashIdx:]
+			} else if len(args) > 0 {
+				dir = args[0]
+			}
+
+			var keepPortsList []string
+			if keepPorts != "" {
+				keepPortsList = strings.Split(keepPorts, ",")
+			}
+
+			return start.Run(ctx, start.Options{
+				Dir:       dir,
+				KeepPorts: keepPortsList,
+				Command:   userCmd,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&keepPorts, "keep-ports", "", "Comma-separated service names to keep host port bindings (e.g. db,redis)")
+
+	return cmd
+}
+
+func stopProjectCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop [directory]",
+		Short: "Stop project containers and clean up stripped compose files",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := "."
+			if len(args) > 0 {
+				dir = args[0]
+			}
+			return start.Stop(cmd.Context(), dir)
+		},
+	}
 }
 
 func printRouteTable(activeRoutes []routes.ActiveRoute) {
