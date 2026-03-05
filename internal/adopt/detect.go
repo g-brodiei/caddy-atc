@@ -82,6 +82,15 @@ func ScanComposeFile(dir string) ([]ComposeService, error) {
 		return nil, fmt.Errorf("no docker-compose.yml found in %s", dir)
 	}
 
+	info, err := os.Stat(composePath)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", composePath, err)
+	}
+	const maxComposeSize = 1 << 20 // 1 MB
+	if info.Size() > maxComposeSize {
+		return nil, fmt.Errorf("compose file too large (%d bytes, max %d)", info.Size(), maxComposeSize)
+	}
+
 	data, err := os.ReadFile(composePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", composePath, err)
@@ -142,7 +151,16 @@ func analyzeService(name string, svc composeServiceDef, composeDir string) Compo
 		if bc := parseBuildConfig(svc.Build); bc != nil {
 			contextDir := filepath.Join(composeDir, bc.Context)
 			dockerfilePath := filepath.Join(contextDir, bc.Dockerfile)
-			cs.Ports = append(cs.Ports, scanDockerfileExpose(dockerfilePath)...)
+			// Ensure the resolved Dockerfile path is within the compose directory
+			// to prevent path traversal via crafted build.context/dockerfile values.
+			absCompose, err1 := filepath.Abs(composeDir)
+			absDockerfile, err2 := filepath.Abs(dockerfilePath)
+			if err1 == nil && err2 == nil {
+				rel, err := filepath.Rel(absCompose, absDockerfile)
+				if err == nil && !strings.HasPrefix(rel, "..") {
+					cs.Ports = append(cs.Ports, scanDockerfileExpose(dockerfilePath)...)
+				}
+			}
 		}
 	}
 

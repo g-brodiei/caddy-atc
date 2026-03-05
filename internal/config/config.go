@@ -5,11 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"gopkg.in/yaml.v3"
 )
+
+const maxConfigFileSize = 1 << 20 // 1 MB
 
 // validName matches safe hostnames and container/service names:
 // alphanumeric, dots, hyphens, underscores. Must start with alphanumeric.
@@ -40,24 +43,28 @@ func ValidateContainerName(s string) error {
 	return nil
 }
 
-// ValidatePort checks that a port string is a valid numeric port.
+// ValidatePort checks that a port string is a valid numeric port in range 1-65535.
 func ValidatePort(s string) error {
 	if s == "" {
 		return fmt.Errorf("port cannot be empty")
 	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return fmt.Errorf("invalid port %q: must be numeric", s)
-		}
+	port, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("invalid port %q: must be numeric", s)
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("invalid port %q: must be between 1 and 65535", s)
 	}
 	return nil
 }
 
 // HomeDir returns the caddy-atc home directory (~/.caddy-atc).
+// Panics if the user's home directory cannot be determined, rather than
+// falling back to a shared temp directory which could enable symlink attacks.
 func HomeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), ".caddy-atc")
+		panic(fmt.Sprintf("caddy-atc: cannot determine home directory: %v", err))
 	}
 	return filepath.Join(home, ".caddy-atc")
 }
@@ -117,7 +124,7 @@ func EnsureHomeDir() error {
 		CaddyfileDir(),
 	}
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
+		if err := os.MkdirAll(d, 0700); err != nil {
 			return fmt.Errorf("creating directory %s: %w", d, err)
 		}
 	}
@@ -127,11 +134,19 @@ func EnsureHomeDir() error {
 // Load reads the projects config from disk.
 func Load() (*Config, error) {
 	path := ProjectsPath()
-	data, err := os.ReadFile(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &Config{Projects: make(map[string]*ProjectConfig)}, nil
 		}
+		return nil, fmt.Errorf("reading config: %w", err)
+	}
+	if info.Size() > maxConfigFileSize {
+		return nil, fmt.Errorf("config file too large (%d bytes, max %d)", info.Size(), maxConfigFileSize)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
 
@@ -154,7 +169,7 @@ func (c *Config) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
-	return atomicWriteFile(ProjectsPath(), data, 0644)
+	return atomicWriteFile(ProjectsPath(), data, 0600)
 }
 
 // LoadAndModify loads the config under a file lock, calls the modifier function,
@@ -165,7 +180,7 @@ func LoadAndModify(fn func(*Config) error) error {
 		return err
 	}
 
-	lockFile, err := os.OpenFile(LockPath(), os.O_CREATE|os.O_RDWR, 0644)
+	lockFile, err := os.OpenFile(LockPath(), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return fmt.Errorf("opening lock file: %w", err)
 	}
