@@ -49,7 +49,7 @@ func Trust(ctx context.Context) error {
 	// Save to home dir
 	homeDir := config.HomeDir()
 	certLocalPath := filepath.Join(homeDir, "caddy-atc-root-ca.crt")
-	if err := os.WriteFile(certLocalPath, certData, 0644); err != nil {
+	if err := os.WriteFile(certLocalPath, certData, 0600); err != nil {
 		return fmt.Errorf("saving CA cert: %w", err)
 	}
 	fmt.Println("CA certificate saved to:", certLocalPath)
@@ -90,11 +90,21 @@ func installCertDarwin(certPath string) error {
 func installCertLinux(certPath string) error {
 	dest := "/usr/local/share/ca-certificates/caddy-atc-root-ca.crt"
 
-	cmd := exec.Command("sudo", "cp", certPath, dest)
-	cmd.Stdout = os.Stdout
+	// Open the file before invoking sudo to eliminate TOCTOU race:
+	// the file descriptor refers to the original inode even if the path
+	// is swapped after open.
+	f, err := os.Open(certPath)
+	if err != nil {
+		return fmt.Errorf("reading cert: %w", err)
+	}
+	defer f.Close()
+
+	cmd := exec.Command("sudo", "tee", dest)
+	cmd.Stdin = f
+	cmd.Stdout = io.Discard
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("copying cert to system store (try running with sudo): %w", err)
+		return fmt.Errorf("installing cert (try running with sudo): %w", err)
 	}
 
 	cmd = exec.Command("sudo", "update-ca-certificates")

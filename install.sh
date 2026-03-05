@@ -78,6 +78,8 @@ echo "Downloading checksums..."
 curl -fsSL -o "${TMPDIR}/checksums.txt" "${BASE_URL}/checksums.txt" || fail "Checksum download failed."
 
 # Verify checksum
+# NOTE: Checksums are verified but not cryptographically signed.
+# For maximum security, verify the release artifacts manually.
 echo "Verifying checksum..."
 cd "$TMPDIR"
 expected=$(grep "${ARCHIVE}" checksums.txt | awk '{print $1}')

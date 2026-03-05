@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -132,6 +133,18 @@ func (w *Watcher) handleContainerStart(ctx context.Context, containerID string) 
 		return // not adopted, ignore silently
 	}
 
+	// Verify compose working directory matches adopted project directory
+	// to prevent label spoofing from rogue containers.
+	composeWorkDir := info.Config.Labels["com.docker.compose.project.working_dir"]
+	if composeWorkDir != "" && projCfg.Dir != "" {
+		absDir, err := filepath.Abs(projCfg.Dir)
+		if err == nil && composeWorkDir != absDir {
+			w.logger.Printf("Ignoring container %s: working_dir %q doesn't match adopted dir %q",
+				shortID(containerID), composeWorkDir, absDir)
+			return
+		}
+	}
+
 	// Detect HTTP port
 	port := DetectHTTPPort(info)
 	if port == "" {
@@ -220,6 +233,17 @@ func (w *Watcher) scanExisting(ctx context.Context) error {
 		_, projCfg := cfg.FindProjectByComposeProject(composeProject)
 		if projCfg == nil {
 			continue
+		}
+
+		// Verify compose working directory matches adopted project directory
+		composeWorkDir := c.Labels["com.docker.compose.project.working_dir"]
+		if composeWorkDir != "" && projCfg.Dir != "" {
+			absDir, err := filepath.Abs(projCfg.Dir)
+			if err == nil && composeWorkDir != absDir {
+				w.logger.Printf("Ignoring container %s: working_dir %q doesn't match adopted dir %q",
+					shortID(c.ID), composeWorkDir, absDir)
+				continue
+			}
 		}
 
 		info, err := w.cli.ContainerInspect(ctx, c.ID)
