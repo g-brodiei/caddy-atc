@@ -143,7 +143,7 @@ func WriteCaddyfile(routes *ActiveRoutes) error {
 		return err
 	}
 
-	return atomicWriteFile(config.CaddyfilePath(), []byte(content), 0644)
+	return atomicWriteFile(config.CaddyfilePath(), []byte(content), 0600)
 }
 
 // atomicWriteFile writes to a temp file then renames to prevent partial writes.

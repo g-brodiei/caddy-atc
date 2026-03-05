@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/g-brodiei/caddy-atc/internal/adopt"
 	"github.com/g-brodiei/caddy-atc/internal/config"
@@ -49,11 +50,18 @@ func main() {
 }
 
 func upCmd() *cobra.Command {
-	return &cobra.Command{
+	var detach bool
+	var daemon bool
+
+	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Start the caddy-atc gateway and watcher",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			if daemon {
+				return runDaemon(ctx)
+			}
 
 			// Start gateway
 			fmt.Println("Starting caddy-atc gateway...")
@@ -61,11 +69,21 @@ func upCmd() *cobra.Command {
 				return err
 			}
 
+			if detach {
+				return runDetached()
+			}
+
 			// Start watcher in foreground
 			fmt.Println("Starting watcher (press Ctrl+C to stop)...")
 			return runWatcher(ctx)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&detach, "detach", "d", false, "Run watcher in the background")
+	cmd.Flags().BoolVar(&daemon, "_daemon", false, "Internal: child process entrypoint")
+	cmd.Flags().MarkHidden("_daemon")
+
+	return cmd
 }
 
 func downCmd() *cobra.Command {
@@ -360,13 +378,106 @@ func printRouteTable(activeRoutes []routes.ActiveRoute) {
 	w.Flush()
 }
 
+func runDetached() error {
+	if err := config.EnsureHomeDir(); err != nil {
+		return err
+	}
+
+	// Acquire exclusive lock on PID file to prevent concurrent spawning
+	pidLock, err := os.OpenFile(config.PidPath()+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return fmt.Errorf("opening PID lock file: %w", err)
+	}
+	defer pidLock.Close()
+
+	if err := syscall.Flock(int(pidLock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return fmt.Errorf("watcher is already starting (lock held)")
+	}
+	defer syscall.Flock(int(pidLock.Fd()), syscall.LOCK_UN)
+
+	if isWatcherRunning() {
+		return fmt.Errorf("watcher is already running")
+	}
+
+	logFile, err := os.OpenFile(config.LogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return fmt.Errorf("opening log file: %w", err)
+	}
+	defer logFile.Close()
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding executable path: %w", err)
+	}
+
+	child := exec.Command(exe, "up", "--_daemon")
+	child.Stdout = logFile
+	child.Stderr = logFile
+	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+	if err := child.Start(); err != nil {
+		return fmt.Errorf("starting background watcher: %w", err)
+	}
+	// Detach: let child run independently
+	child.Process.Release()
+
+	if err := waitForPidFileAt(config.PidPath(), 5*time.Second); err != nil {
+		return fmt.Errorf("watcher did not start: %w", err)
+	}
+
+	fmt.Println("Watcher started in background.")
+	fmt.Printf("Logs: %s\n", config.LogPath())
+	return nil
+}
+
+func waitForPidFileAt(path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			if _, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+				return nil
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("timed out waiting for PID file after %s", timeout)
+}
+
+func runDaemon(ctx context.Context) error {
+	if err := config.EnsureHomeDir(); err != nil {
+		return err
+	}
+
+	// In daemon mode, stdout/stderr are the log file (set by parent)
+	logger := log.New(os.Stdout, "[caddy-atc] ", log.LstdFlags)
+
+	// Write PID file to signal parent we're alive
+	if err := os.WriteFile(config.PidPath(), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+		logger.Printf("Warning: could not write PID file: %v", err)
+	}
+	defer os.Remove(config.PidPath())
+
+	w, err := watcher.New(logger)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	logger.Println("Watcher started (daemon mode)")
+	return w.Run(ctx)
+}
+
 func runWatcher(ctx context.Context) error {
 	if err := config.EnsureHomeDir(); err != nil {
 		return err
 	}
 
 	// Set up logging
-	logFile, err := os.OpenFile(config.LogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := os.OpenFile(config.LogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("opening log file: %w", err)
 	}
@@ -375,7 +486,7 @@ func runWatcher(ctx context.Context) error {
 	logger := log.New(io.MultiWriter(os.Stdout, logFile), "[caddy-atc] ", log.LstdFlags)
 
 	// Write PID file
-	if err := os.WriteFile(config.PidPath(), []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(config.PidPath(), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 		logger.Printf("Warning: could not write PID file: %v", err)
 	}
 	defer os.Remove(config.PidPath())

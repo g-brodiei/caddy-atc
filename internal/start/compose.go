@@ -7,6 +7,37 @@ import (
 	"strings"
 )
 
+// atomicWriteFile writes to a temp file then renames to prevent partial writes.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp.*")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("setting permissions: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("renaming temp file: %w", err)
+	}
+	return nil
+}
+
 const strippedPrefix = ".caddy-atc-compose"
 
 // DetectComposeFiles finds which compose files Docker Compose would load
@@ -67,7 +98,7 @@ func GenerateStrippedFiles(originals []string, keepPorts []string) ([]string, er
 		name := strippedFilename(i, len(originals))
 		outPath := filepath.Join(dir, name)
 
-		if err := os.WriteFile(outPath, out, 0644); err != nil {
+		if err := atomicWriteFile(outPath, out, 0644); err != nil {
 			return nil, fmt.Errorf("writing %s: %w", outPath, err)
 		}
 

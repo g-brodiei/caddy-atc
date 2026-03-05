@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+echo "Running pre-commit checks..."
+
+go vet ./...
+go test ./... -count=1
+
+# Run govulncheck if installed
+if command -v govulncheck > /dev/null 2>&1; then
+    govulncheck ./...
+else
+    echo "Warning: govulncheck not installed, skipping vulnerability check"
+    echo "  Install with: go install golang.org/x/vuln/cmd/govulncheck@latest"
+fi
+
+go build -o /dev/null ./cmd/caddy-atc

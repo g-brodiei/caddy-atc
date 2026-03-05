@@ -17,7 +17,7 @@ The installed binary is a symlink: `~/bin/caddy-atc -> ./build/caddy-atc`. Alway
 ## Project Structure
 
 ```
-cmd/caddy-atc/main.go      CLI entrypoint (cobra commands)
+cmd/caddy-atc/main.go      CLI entrypoint (cobra commands, detach/daemon support)
 internal/
   gateway/                  Docker container lifecycle
     gateway.go              Up/Down/Restart/IsRunning
@@ -48,6 +48,7 @@ internal/
 - **Validation**: All values interpolated into Caddyfiles are validated against `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` to prevent injection.
 - **Docker exec recovery**: `reloadRoutes` uses try-first-then-recover (not check-then-act) to handle zombie containers and TOCTOU races.
 - **Port detection at adopt time**: Scans both compose `ports:`/`expose:` directives AND Dockerfile `EXPOSE` directives for services with `build:` context.
+- **Detach mode**: `up -d` uses re-exec pattern (Go can't fork). Parent re-execs with hidden `--_daemon` flag; child runs detached (`Setsid: true`) with stdout/stderr redirected to log file. Parent waits for PID file to confirm child started.
 
 ## Common Pitfalls
 

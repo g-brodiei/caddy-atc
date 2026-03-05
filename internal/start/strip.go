@@ -11,6 +11,11 @@ import (
 // entries in keepPorts retain their ports. All other YAML content (variables,
 // anchors, comments, structure) is preserved via the yaml.v3 Node API.
 func StripPorts(data []byte, keepPorts []string) ([]byte, error) {
+	const maxComposeSize = 1 << 20 // 1 MB
+	if len(data) > maxComposeSize {
+		return nil, fmt.Errorf("compose file too large (%d bytes, max %d)", len(data), maxComposeSize)
+	}
+
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parsing YAML: %w", err)
