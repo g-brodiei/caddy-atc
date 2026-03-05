@@ -59,8 +59,8 @@ make build
 # Build
 make build
 
-# Start the gateway and watcher
-caddy-atc up
+# Start the gateway and watcher (background)
+caddy-atc up -d
 
 # Adopt a project (from the project directory with docker-compose.yml)
 cd ~/project/my-app
@@ -78,7 +78,8 @@ docker compose up -d
 
 | Command | Description |
 |---------|-------------|
-| `caddy-atc up` | Start the gateway container and watcher |
+| `caddy-atc up` | Start the gateway container and watcher (foreground) |
+| `caddy-atc up -d` | Start the gateway and watcher in the background |
 | `caddy-atc down` | Stop the gateway and watcher |
 | `caddy-atc adopt [dir]` | Register a project for automatic routing |
 | `caddy-atc unadopt [dir]` | Remove a project from routing |
