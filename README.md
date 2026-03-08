@@ -7,7 +7,7 @@
 
 Local development gateway that eliminates Docker port conflicts. Routes HTTP traffic to your project containers by hostname through a single Caddy reverse proxy.
 
-Instead of juggling port numbers across projects (`localhost:3000`, `localhost:3001`, `localhost:8080`...), each project gets a clean hostname:
+Instead of juggling port numbers across projects (`localhost:3000`, `localhost:3001`, `localhost:8080`...), each project gets a clean hostnames:
 
 ```
 backend.myproject.localhost
