@@ -119,7 +119,7 @@ func adoptCmd() *cobra.Command {
 			fmt.Println("Scanning docker-compose.yml...")
 			fmt.Println()
 
-			result, err := adopt.Adopt(dir, hostname, dryRun)
+			result, err := adopt.Adopt(dir, hostname, "", dryRun)
 			if err != nil {
 				return err
 			}

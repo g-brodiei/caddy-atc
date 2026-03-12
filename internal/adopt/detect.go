@@ -75,11 +75,24 @@ type composeServiceDef struct {
 	Expose []string `yaml:"expose"`
 }
 
-// ScanComposeFile reads a docker-compose.yml and detects HTTP services.
-func ScanComposeFile(dir string) ([]ComposeService, error) {
-	composePath := findComposeFile(dir)
-	if composePath == "" {
-		return nil, fmt.Errorf("no docker-compose.yml found in %s", dir)
+// ScanComposeFile reads a docker-compose file and detects HTTP services.
+// If composeFileName is non-empty, it is resolved relative to dir instead of auto-detecting.
+func ScanComposeFile(dir string, composeFileName string) ([]ComposeService, error) {
+	var composePath string
+	if composeFileName != "" {
+		if filepath.IsAbs(composeFileName) {
+			composePath = composeFileName
+		} else {
+			composePath = filepath.Join(dir, composeFileName)
+		}
+		if _, err := os.Stat(composePath); err != nil {
+			return nil, fmt.Errorf("compose file not found: %s", composePath)
+		}
+	} else {
+		composePath = findComposeFile(dir)
+		if composePath == "" {
+			return nil, fmt.Errorf("no docker-compose.yml found in %s", dir)
+		}
 	}
 
 	info, err := os.Stat(composePath)

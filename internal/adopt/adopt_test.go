@@ -143,7 +143,7 @@ func TestAdopt_DryRun(t *testing.T) {
 		t.Fatalf("writing compose file: %v", err)
 	}
 
-	result, err := Adopt(projectDir, "myproject.localhost", true)
+	result, err := Adopt(projectDir, "myproject.localhost", "", true)
 	if err != nil {
 		t.Fatalf("Adopt() error = %v", err)
 	}
@@ -183,7 +183,7 @@ func TestAdopt_ValidationRejectsSpaces(t *testing.T) {
 		t.Fatalf("writing compose file: %v", err)
 	}
 
-	_, err := Adopt(projectDir, "my project.localhost", false)
+	_, err := Adopt(projectDir, "my project.localhost", "", false)
 	if err == nil {
 		t.Error("expected error for hostname with spaces")
 	}
@@ -208,7 +208,7 @@ func TestAdopt_DefaultHostname(t *testing.T) {
 		t.Fatalf("writing compose file: %v", err)
 	}
 
-	result, err := Adopt(projectDir, "", true)
+	result, err := Adopt(projectDir, "", "", true)
 	if err != nil {
 		t.Fatalf("Adopt() error = %v", err)
 	}
@@ -226,7 +226,7 @@ func TestAdopt_NoComposeFile(t *testing.T) {
 		t.Fatalf("creating project dir: %v", err)
 	}
 
-	_, err := Adopt(projectDir, "empty.localhost", false)
+	_, err := Adopt(projectDir, "empty.localhost", "", false)
 	if err == nil {
 		t.Error("expected error when no compose file exists")
 	}
@@ -237,7 +237,7 @@ func TestAdopt_NotADirectory(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "notadir")
 	os.WriteFile(filePath, []byte("hello"), 0644)
 
-	_, err := Adopt(filePath, "test.localhost", false)
+	_, err := Adopt(filePath, "test.localhost", "", false)
 	if err == nil {
 		t.Error("expected error for non-directory path")
 	}
@@ -277,7 +277,7 @@ func TestAdopt_NoHTTPServices(t *testing.T) {
 		t.Fatalf("writing compose file: %v", err)
 	}
 
-	_, err := Adopt(projectDir, "dbonly.localhost", false)
+	_, err := Adopt(projectDir, "dbonly.localhost", "", false)
 	if err == nil {
 		t.Error("expected error when no HTTP services detected")
 	}

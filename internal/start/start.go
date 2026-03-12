@@ -37,7 +37,7 @@ func Run(ctx context.Context, opts Options) error {
 	projectName := filepath.Base(absDir)
 	if _, ok := cfg.Projects[projectName]; !ok {
 		fmt.Printf("Auto-adopting %s (%s.localhost)...\n", projectName, projectName)
-		if _, err := adopt.Adopt(absDir, "", false); err != nil {
+		if _, err := adopt.Adopt(absDir, "", "", false); err != nil {
 			return fmt.Errorf("auto-adopt failed: %w", err)
 		}
 	}
