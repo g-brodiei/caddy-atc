@@ -105,6 +105,7 @@ func downCmd() *cobra.Command {
 func adoptCmd() *cobra.Command {
 	var hostname string
 	var dryRun bool
+	var composeFile string
 
 	cmd := &cobra.Command{
 		Use:   "adopt [directory]",
@@ -117,9 +118,12 @@ func adoptCmd() *cobra.Command {
 			}
 
 			fmt.Println("Scanning docker-compose.yml...")
+			if composeFile != "" {
+				fmt.Printf("Using compose file: %s\n", composeFile)
+			}
 			fmt.Println()
 
-			result, err := adopt.Adopt(dir, hostname, "", dryRun)
+			result, err := adopt.Adopt(dir, hostname, composeFile, dryRun)
 			if err != nil {
 				return err
 			}
@@ -166,6 +170,7 @@ func adoptCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&hostname, "hostname", "", "Override base hostname (default: <dirname>.localhost)")
+	cmd.Flags().StringVarP(&composeFile, "file", "f", "", "Path to docker-compose file (default: auto-detect)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without saving")
 
 	return cmd
