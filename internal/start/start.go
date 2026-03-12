@@ -55,7 +55,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	// 3. Detect compose files
-	composeFiles, err := DetectComposeFiles(absDir)
+	composeFiles, err := DetectComposeFiles(absDir, "")
 	if err != nil {
 		return err
 	}

@@ -11,7 +11,7 @@ func TestDetectComposeFiles_Single(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "docker-compose.yml"), []byte("services:\n  web:\n    image: nginx\n"), 0644)
 
-	files, err := DetectComposeFiles(dir)
+	files, err := DetectComposeFiles(dir, "")
 	if err != nil {
 		t.Fatalf("DetectComposeFiles() error = %v", err)
 	}
@@ -28,7 +28,7 @@ func TestDetectComposeFiles_WithOverride(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "docker-compose.yml"), []byte("services:\n  web:\n    image: nginx\n"), 0644)
 	os.WriteFile(filepath.Join(dir, "docker-compose.override.yml"), []byte("services:\n  web:\n    ports:\n      - \"80:80\"\n"), 0644)
 
-	files, err := DetectComposeFiles(dir)
+	files, err := DetectComposeFiles(dir, "")
 	if err != nil {
 		t.Fatalf("DetectComposeFiles() error = %v", err)
 	}
@@ -41,7 +41,7 @@ func TestDetectComposeFiles_ComposeYml(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "compose.yml"), []byte("services:\n  web:\n    image: nginx\n"), 0644)
 
-	files, err := DetectComposeFiles(dir)
+	files, err := DetectComposeFiles(dir, "")
 	if err != nil {
 		t.Fatalf("DetectComposeFiles() error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestDetectComposeFiles_ComposeYml(t *testing.T) {
 
 func TestDetectComposeFiles_NoFile(t *testing.T) {
 	dir := t.TempDir()
-	_, err := DetectComposeFiles(dir)
+	_, err := DetectComposeFiles(dir, "")
 	if err == nil {
 		t.Error("expected error when no compose file exists")
 	}
@@ -67,7 +67,7 @@ func TestDetectComposeFiles_FromEnv(t *testing.T) {
 
 	t.Setenv("COMPOSE_FILE", f1+":"+f2)
 
-	files, err := DetectComposeFiles(dir)
+	files, err := DetectComposeFiles(dir, "")
 	if err != nil {
 		t.Fatalf("DetectComposeFiles() error = %v", err)
 	}
@@ -137,6 +137,44 @@ func TestGenerateStrippedFiles_Override(t *testing.T) {
 	}
 	if strings.Contains(string(data), "ports:") {
 		t.Error("stripped override still contains ports:")
+	}
+}
+
+func TestDetectComposeFiles_ExplicitFile(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "docker-compose.demo.yaml"), []byte("services:\n  web:\n    image: nginx\n"), 0644)
+
+	files, err := DetectComposeFiles(dir, "docker-compose.demo.yaml")
+	if err != nil {
+		t.Fatalf("DetectComposeFiles() error = %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	if filepath.Base(files[0]) != "docker-compose.demo.yaml" {
+		t.Errorf("expected docker-compose.demo.yaml, got %s", filepath.Base(files[0]))
+	}
+}
+
+func TestDetectComposeFiles_ExplicitFileWithOverride(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "docker-compose.demo.yaml"), []byte("services:\n  web:\n    image: nginx\n"), 0644)
+	os.WriteFile(filepath.Join(dir, "docker-compose.demo.override.yaml"), []byte("services:\n  web:\n    ports:\n      - \"80:80\"\n"), 0644)
+
+	files, err := DetectComposeFiles(dir, "docker-compose.demo.yaml")
+	if err != nil {
+		t.Fatalf("DetectComposeFiles() error = %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d: %v", len(files), files)
+	}
+}
+
+func TestDetectComposeFiles_ExplicitFileMissing(t *testing.T) {
+	dir := t.TempDir()
+	_, err := DetectComposeFiles(dir, "nonexistent.yml")
+	if err == nil {
+		t.Error("expected error when explicit file doesn't exist")
 	}
 }
 

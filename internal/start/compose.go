@@ -41,9 +41,28 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 const strippedPrefix = ".caddy-atc-compose"
 
 // DetectComposeFiles finds which compose files Docker Compose would load
-// for the given project directory. Checks COMPOSE_FILE env var first, then
-// falls back to standard file detection (with override auto-loading).
-func DetectComposeFiles(dir string) ([]string, error) {
+// for the given project directory. If composeFile is provided (non-empty),
+// uses that file and looks for overrides. Otherwise, checks COMPOSE_FILE env var
+// first, then falls back to standard file detection (with override auto-loading).
+func DetectComposeFiles(dir string, composeFile string) ([]string, error) {
+	if composeFile != "" {
+		var base string
+		if filepath.IsAbs(composeFile) {
+			base = composeFile
+		} else {
+			base = filepath.Join(dir, composeFile)
+		}
+		if _, err := os.Stat(base); err != nil {
+			return nil, fmt.Errorf("compose file not found: %s", base)
+		}
+		files := []string{base}
+		override := findOverrideFile(filepath.Dir(base), base)
+		if override != "" {
+			files = append(files, override)
+		}
+		return files, nil
+	}
+
 	if envVal := os.Getenv("COMPOSE_FILE"); envVal != "" {
 		sep := ":"
 		parts := strings.Split(envVal, sep)
