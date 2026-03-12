@@ -1,6 +1,6 @@
 module github.com/g-brodiei/caddy-atc
 
-go 1.24.13
+go 1.26.0
 
 require (
 	github.com/docker/docker v27.5.1+incompatible
