@@ -115,7 +115,18 @@ func runDefault(ctx context.Context, dir string, env []string) error {
 
 // execUserCommand replaces the current process with the user's command.
 func execUserCommand(dir string, env []string, args []string) error {
-	binary, err := exec.LookPath(args[0])
+	// Resolve the command relative to the project directory first,
+	// then fall back to $PATH lookup. This handles relative paths
+	// like "scripts/up.sh" that are relative to the project dir.
+	cmdPath := args[0]
+	if !filepath.IsAbs(cmdPath) {
+		candidate := filepath.Join(dir, cmdPath)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			cmdPath = candidate
+		}
+	}
+
+	binary, err := exec.LookPath(cmdPath)
 	if err != nil {
 		return fmt.Errorf("command not found: %s", args[0])
 	}
