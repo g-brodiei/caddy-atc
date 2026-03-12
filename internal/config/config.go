@@ -110,6 +110,7 @@ type ProjectConfig struct {
 	ComposeProject string            `yaml:"compose_project"`
 	Hostname       string            `yaml:"hostname"`
 	Services       map[string]string `yaml:"services"`
+	ComposeFile    string            `yaml:"compose_file,omitempty"`
 }
 
 // Config is the top-level config structure.

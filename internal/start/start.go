@@ -16,9 +16,10 @@ import (
 
 // Options configures the start command.
 type Options struct {
-	Dir       string   // Project directory (resolved to absolute)
-	KeepPorts []string // Service names whose ports should be kept
-	Command   []string // User command to run (nil = docker compose up -d)
+	Dir         string   // Project directory (resolved to absolute)
+	KeepPorts   []string // Service names whose ports should be kept
+	Command     []string // User command to run (nil = docker compose up -d)
+	ComposeFile string   // Explicit compose file path (empty = auto-detect or use saved config)
 }
 
 // Run executes the start workflow: auto-adopt, ensure gateway, strip ports, exec command.
@@ -37,7 +38,7 @@ func Run(ctx context.Context, opts Options) error {
 	projectName := filepath.Base(absDir)
 	if _, ok := cfg.Projects[projectName]; !ok {
 		fmt.Printf("Auto-adopting %s (%s.localhost)...\n", projectName, projectName)
-		if _, err := adopt.Adopt(absDir, "", false); err != nil {
+		if _, err := adopt.Adopt(absDir, "", opts.ComposeFile, false); err != nil {
 			return fmt.Errorf("auto-adopt failed: %w", err)
 		}
 	}
@@ -54,13 +55,25 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	// 3. Detect compose files
-	composeFiles, err := DetectComposeFiles(absDir)
+	// 3. Resolve compose file: flag > saved config > auto-detect
+	composeFile := opts.ComposeFile
+	if composeFile == "" {
+		// Re-load config to get potentially just-saved ComposeFile
+		cfg, err = config.Load()
+		if err == nil {
+			if proj, ok := cfg.Projects[projectName]; ok {
+				composeFile = proj.ComposeFile
+			}
+		}
+	}
+
+	// 4. Detect compose files
+	composeFiles, err := DetectComposeFiles(absDir, composeFile)
 	if err != nil {
 		return err
 	}
 
-	// 4. Generate stripped files
+	// 5. Generate stripped files
 	strippedFiles, err := GenerateStrippedFiles(composeFiles, opts.KeepPorts)
 	if err != nil {
 		return err
@@ -68,12 +81,12 @@ func Run(ctx context.Context, opts Options) error {
 
 	fmt.Printf("Generated %s (ports stripped)\n", filepath.Base(strippedFiles[0]))
 
-	// 5. Build environment with COMPOSE_FILE pointing to stripped files
+	// 6. Build environment with COMPOSE_FILE pointing to stripped files
 	composeFileEnv := BuildComposeFileEnv(strippedFiles)
 	env := config.FilterEnv("COMPOSE_FILE")
 	env = append(env, "COMPOSE_FILE="+composeFileEnv)
 
-	// 6. Execute command
+	// 7. Execute command
 	if len(opts.Command) == 0 {
 		return runDefault(ctx, absDir, env)
 	}
@@ -102,7 +115,18 @@ func runDefault(ctx context.Context, dir string, env []string) error {
 
 // execUserCommand replaces the current process with the user's command.
 func execUserCommand(dir string, env []string, args []string) error {
-	binary, err := exec.LookPath(args[0])
+	// Resolve the command relative to the project directory first,
+	// then fall back to $PATH lookup. This handles relative paths
+	// like "scripts/up.sh" that are relative to the project dir.
+	cmdPath := args[0]
+	if !filepath.IsAbs(cmdPath) {
+		candidate := filepath.Join(dir, cmdPath)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			cmdPath = candidate
+		}
+	}
+
+	binary, err := exec.LookPath(cmdPath)
 	if err != nil {
 		return fmt.Errorf("command not found: %s", args[0])
 	}

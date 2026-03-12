@@ -3,14 +3,13 @@
 ## Build & Test
 
 ```bash
-# Go is not on PATH in this environment
-/usr/local/go/bin/go build -o build/caddy-atc ./cmd/caddy-atc
+# Go is not on PATH in this environment; use PATH prefix for make
+PATH="/usr/local/go/bin:$PATH" make build
 /usr/local/go/bin/go test ./... -count=1
 /usr/local/go/bin/go vet ./...
-
-# Or use Makefile (if go is on PATH)
-make build
 ```
+
+**Always use `make build`** — it injects the version via `-ldflags` from `git describe`. Raw `go build` produces a binary that reports `version dev`.
 
 The installed binary is a symlink: `~/bin/caddy-atc -> ./build/caddy-atc`. Always rebuild after code changes.
 

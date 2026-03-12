@@ -19,7 +19,7 @@ type Result struct {
 }
 
 // Adopt scans a project directory and registers it in the config.
-func Adopt(dir string, hostname string, dryRun bool) (*Result, error) {
+func Adopt(dir string, hostname string, composeFile string, dryRun bool) (*Result, error) {
 	// Resolve absolute path
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -46,7 +46,7 @@ func Adopt(dir string, hostname string, dryRun bool) (*Result, error) {
 	}
 
 	// Scan compose file
-	services, err := ScanComposeFile(absDir)
+	services, err := ScanComposeFile(absDir, composeFile)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +97,7 @@ func Adopt(dir string, hostname string, dryRun bool) (*Result, error) {
 			ComposeProject: composeProject,
 			Hostname:       hostname,
 			Services:       svcHostnames,
+			ComposeFile:    composeFile,
 		}
 		return nil
 	})

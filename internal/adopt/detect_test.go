@@ -157,7 +157,7 @@ func TestScanComposeFile(t *testing.T) {
 		t.Fatalf("writing compose file: %v", err)
 	}
 
-	services, err := ScanComposeFile(tmpDir)
+	services, err := ScanComposeFile(tmpDir, "")
 	if err != nil {
 		t.Fatalf("ScanComposeFile() error = %v", err)
 	}
@@ -192,7 +192,7 @@ func TestScanComposeFile(t *testing.T) {
 
 func TestScanComposeFile_NoFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	_, err := ScanComposeFile(tmpDir)
+	_, err := ScanComposeFile(tmpDir, "")
 	if err == nil {
 		t.Error("expected error when no compose file exists")
 	}
@@ -283,6 +283,31 @@ func TestParseBuildConfig(t *testing.T) {
 	}
 }
 
+func TestScanComposeFile_ExplicitFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	composeContent := `services:
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "docker-compose.demo.yaml"), []byte(composeContent), 0644); err != nil {
+		t.Fatalf("writing compose file: %v", err)
+	}
+
+	services, err := ScanComposeFile(tmpDir, "docker-compose.demo.yaml")
+	if err != nil {
+		t.Fatalf("ScanComposeFile() error = %v", err)
+	}
+	if len(services) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(services))
+	}
+	if services[0].Name != "web" {
+		t.Errorf("Name = %q, want %q", services[0].Name, "web")
+	}
+}
+
 func TestScanComposeFile_ComposeYml(t *testing.T) {
 	tmpDir := t.TempDir()
 	composeContent := `services:
@@ -296,7 +321,7 @@ func TestScanComposeFile_ComposeYml(t *testing.T) {
 		t.Fatalf("writing compose file: %v", err)
 	}
 
-	services, err := ScanComposeFile(tmpDir)
+	services, err := ScanComposeFile(tmpDir, "")
 	if err != nil {
 		t.Fatalf("ScanComposeFile() error = %v", err)
 	}
