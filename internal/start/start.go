@@ -128,6 +128,9 @@ func execUserCommand(dir string, env []string, args []string) error {
 
 	binary, err := exec.LookPath(cmdPath)
 	if err != nil {
+		if info, statErr := os.Stat(cmdPath); statErr == nil && !info.IsDir() {
+			return fmt.Errorf("not executable: %s (try: chmod +x %s)", args[0], args[0])
+		}
 		return fmt.Errorf("command not found: %s", args[0])
 	}
 
