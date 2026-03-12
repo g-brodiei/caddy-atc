@@ -350,3 +350,33 @@ func TestLoadAndModifyConcurrent(t *testing.T) {
 		t.Errorf("expected %d projects, got %d (data lost due to race)", n, len(final.Projects))
 	}
 }
+
+func TestProjectConfig_ComposeFileRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	err := LoadAndModify(func(cfg *Config) error {
+		cfg.Projects["myapp"] = &ProjectConfig{
+			Dir:            "/home/user/myapp",
+			ComposeProject: "myapp",
+			Hostname:       "myapp.localhost",
+			Services:       map[string]string{"web": "myapp.localhost"},
+			ComposeFile:    "docker-compose.demo.yaml",
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("LoadAndModify() error = %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	proj := cfg.Projects["myapp"]
+	if proj.ComposeFile != "docker-compose.demo.yaml" {
+		t.Errorf("ComposeFile = %q, want %q", proj.ComposeFile, "docker-compose.demo.yaml")
+	}
+}
+
