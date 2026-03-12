@@ -33,7 +33,7 @@ Pre-built binaries are available on the [Releases page](https://github.com/g-bro
 
 ### From source
 
-Requires Go 1.24+:
+Requires Go 1.26+:
 
 ```bash
 git clone https://github.com/g-brodiei/caddy-atc.git
@@ -81,12 +81,12 @@ docker compose up -d
 | `caddy-atc up` | Start the gateway container and watcher (foreground) |
 | `caddy-atc up -d` | Start the gateway and watcher in the background |
 | `caddy-atc down` | Stop the gateway and watcher |
-| `caddy-atc adopt [dir]` | Register a project for automatic routing |
+| `caddy-atc adopt [dir] [-f file]` | Register a project for automatic routing |
 | `caddy-atc unadopt [dir]` | Remove a project from routing |
 | `caddy-atc status` | Show gateway health and active routes |
 | `caddy-atc routes` | List all active routes |
 | `caddy-atc trust` | Install Caddy's root CA in system trust store |
-| `caddy-atc start [dir] [-- cmd]` | Start project with ports stripped |
+| `caddy-atc start [dir] [-f file] [-- cmd]` | Start project with ports stripped |
 | `caddy-atc stop [dir]` | Stop project and clean up stripped files |
 | `caddy-atc logs [-f]` | Show (or follow) watcher logs |
 
@@ -98,10 +98,22 @@ Use `caddy-atc start` to run multiple projects simultaneously without port confl
 caddy-atc start                              # docker compose up -d (default)
 caddy-atc start -- ./scripts/dev.sh          # custom start script
 caddy-atc start --keep-ports db,redis        # keep host ports for specific services
+caddy-atc start -f docker-compose.demo.yaml  # use a custom compose file
 caddy-atc stop                               # stop and clean up
 ```
 
 This strips all host port bindings from the compose file and sets `COMPOSE_FILE` so any `docker compose` calls in your script use the stripped version. Add `.caddy-atc-compose*.yml` to your `.gitignore`.
+
+### Custom Compose Files
+
+If your project uses a non-standard compose filename, use the `-f` flag:
+
+```bash
+caddy-atc adopt -f docker-compose.demo.yaml
+caddy-atc start -f docker-compose.demo.yaml -- ./scripts/dev.sh
+```
+
+The compose file path is saved in the project config at adopt time, so subsequent `start` commands remember it automatically.
 
 ### Adopt Options
 
@@ -109,6 +121,7 @@ This strips all host port bindings from the compose file and sets `COMPOSE_FILE`
 caddy-atc adopt                    # Adopt current directory
 caddy-atc adopt ~/project/my-app   # Adopt specific directory
 caddy-atc adopt --hostname myapp.localhost  # Override base hostname
+caddy-atc adopt -f docker-compose.demo.yaml  # Use a custom compose file
 caddy-atc adopt --dry-run          # Preview without saving
 ```
 
@@ -155,4 +168,4 @@ Config is stored in `~/.caddy-atc/`:
 
 - Docker with Compose V2
 - Linux, macOS, or WSL2
-- Go 1.24+ (only needed for building from source)
+- Go 1.26+ (only needed for building from source)
