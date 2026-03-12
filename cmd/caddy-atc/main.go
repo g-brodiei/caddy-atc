@@ -310,6 +310,7 @@ func logsCmd() *cobra.Command {
 
 func startCmd() *cobra.Command {
 	var keepPorts string
+	var composeFile string
 
 	cmd := &cobra.Command{
 		Use:   "start [directory] [-- command...]",
@@ -323,7 +324,8 @@ routing automatically.
 Examples:
   caddy-atc start                          # docker compose up -d (default)
   caddy-atc start -- ./scripts/dev.sh      # custom command
-  caddy-atc start --keep-ports db,redis    # keep host ports for db and redis`,
+  caddy-atc start --keep-ports db,redis    # keep host ports for db and redis
+  caddy-atc start -f docker-compose.demo.yaml  # use custom compose file`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
@@ -346,14 +348,16 @@ Examples:
 			}
 
 			return start.Run(ctx, start.Options{
-				Dir:       dir,
-				KeepPorts: keepPortsList,
-				Command:   userCmd,
+				Dir:         dir,
+				KeepPorts:   keepPortsList,
+				Command:     userCmd,
+				ComposeFile: composeFile,
 			})
 		},
 	}
 
 	cmd.Flags().StringVar(&keepPorts, "keep-ports", "", "Comma-separated service names to keep host port bindings (e.g. db,redis)")
+	cmd.Flags().StringVarP(&composeFile, "file", "f", "", "Path to docker-compose file (default: auto-detect or use saved config)")
 
 	return cmd
 }
