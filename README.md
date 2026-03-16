@@ -99,6 +99,23 @@ docker compose up -d
 | `caddy-atc start [dir] [-f file] [-- cmd]` | Start project with ports stripped |
 | `caddy-atc stop [dir]` | Stop project containers |
 | `caddy-atc logs [-f]` | Show (or follow) watcher logs |
+| `caddy-atc update` | Update to the latest version |
+
+### Updating
+
+caddy-atc checks for new versions in the background (cached for 24 hours). When an update is available, you'll see a notice after any command:
+
+```
+Update available: v0.5.0 → v0.6.0 (run 'caddy-atc update' to upgrade)
+```
+
+To update:
+
+```bash
+caddy-atc update
+```
+
+This downloads the latest release from GitHub, verifies the SHA256 checksum, and replaces the binary in-place. If the binary is in a system directory, use `sudo caddy-atc update`.
 
 ### Starting Projects
 
