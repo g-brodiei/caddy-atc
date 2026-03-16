@@ -365,7 +365,7 @@ Examples:
 func stopProjectCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop [directory]",
-		Short: "Stop project containers and clean up stripped compose files",
+		Short: "Stop project containers",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
