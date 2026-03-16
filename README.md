@@ -142,6 +142,20 @@ Non-HTTP services (postgres, redis, etc.) are automatically skipped.
 - Other services are prefixed: `api.myproject.localhost`, `worker.myproject.localhost`
 - Multiple containers for the same service (replicas) share a hostname with Caddy load balancing
 
+### Wildcard Hostnames
+
+If your project has its own internal reverse proxy (e.g., Caddy or nginx) that handles hostname-based routing, you can use a wildcard hostname to forward all subdomains to it:
+
+```bash
+caddy-atc adopt --hostname '*.curate.localhost' ~/project/my-app
+```
+
+This assigns:
+- `*.curate.localhost` to the primary service (e.g., the project's own Caddy)
+- `client.curate.localhost`, `server.curate.localhost`, etc. to other services
+
+The wildcard prefix (`*.`) is stripped when generating subservice hostnames. Caddy matches specific hostnames before wildcards, so directly-routed services take priority over the wildcard catch-all.
+
 ## HTTPS / Trust
 
 caddy-atc uses Caddy's internal CA to issue certificates for `*.localhost` domains. To avoid browser certificate warnings:

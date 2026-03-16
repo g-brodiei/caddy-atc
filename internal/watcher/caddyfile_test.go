@@ -185,6 +185,38 @@ func TestGenerateCaddyfile_DuplicateHostnames_RejectsInvalidUpstream(t *testing.
 	}
 }
 
+func TestGenerateCaddyfile_WildcardHostname(t *testing.T) {
+	routes := NewActiveRoutes()
+	routes.Add("c1", &Route{
+		Hostname:      "*.curate.localhost",
+		ContainerName: "monolith-caddy-1",
+		Port:          "80",
+	})
+	routes.Add("c2", &Route{
+		Hostname:      "client.curate.localhost",
+		ContainerName: "monolith-client-1",
+		Port:          "3000",
+	})
+
+	got, err := GenerateCaddyfile(routes)
+	if err != nil {
+		t.Fatalf("GenerateCaddyfile() error = %v", err)
+	}
+
+	if !strings.Contains(got, "*.curate.localhost {") {
+		t.Error("expected wildcard hostname block")
+	}
+	if !strings.Contains(got, "client.curate.localhost {") {
+		t.Error("expected specific hostname block")
+	}
+	if !strings.Contains(got, "reverse_proxy monolith-caddy-1:80") {
+		t.Error("expected reverse_proxy for wildcard")
+	}
+	if !strings.Contains(got, "reverse_proxy monolith-client-1:3000") {
+		t.Error("expected reverse_proxy for client")
+	}
+}
+
 func TestActiveRoutes_AddGetRemove(t *testing.T) {
 	ar := NewActiveRoutes()
 

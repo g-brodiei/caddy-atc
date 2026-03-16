@@ -28,6 +28,12 @@ func TestValidateHostname(t *testing.T) {
 		{"leading hyphen", "-foo.localhost", true},
 		{"leading dot", ".foo.localhost", true},
 		{"semicolon", "foo;bar", true},
+		{"valid wildcard", "*.curate.localhost", false},
+		{"valid wildcard simple", "*.localhost", false},
+		{"wildcard only star", "*", true},
+		{"wildcard no dot", "*localhost", true},
+		{"wildcard double star", "**.localhost", true},
+		{"wildcard mid-string", "foo.*.localhost", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,6 +115,33 @@ func TestResolveHostname(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := p.ResolveHostname(tt.serviceName)
+			if got != tt.want {
+				t.Errorf("ResolveHostname(%q) = %q, want %q", tt.serviceName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveHostname_Wildcard(t *testing.T) {
+	wp := &ProjectConfig{
+		Hostname: "*.curate.localhost",
+		Services: map[string]string{
+			"caddy": "*.curate.localhost",
+		},
+	}
+
+	tests := []struct {
+		name        string
+		serviceName string
+		want        string
+	}{
+		{"explicit wildcard mapping", "caddy", "*.curate.localhost"},
+		{"auto-generated strips wildcard", "client", "client.curate.localhost"},
+		{"auto-generated strips wildcard 2", "server", "server.curate.localhost"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wp.ResolveHostname(tt.serviceName)
 			if got != tt.want {
 				t.Errorf("ResolveHostname(%q) = %q, want %q", tt.serviceName, got, tt.want)
 			}
