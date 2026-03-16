@@ -112,5 +112,56 @@ else
 fi
 
 echo "caddy-atc v${VERSION} installed successfully!"
+
+# Install shell completions
+CADDY_ATC="${INSTALL_DIR}/caddy-atc"
+install_completions() {
+    SHELL_NAME=$(basename "${SHELL:-}")
+
+    case "$SHELL_NAME" in
+        zsh)
+            if [ "$OS" = "darwin" ] && command -v brew >/dev/null 2>&1; then
+                COMP_DIR="$(brew --prefix)/share/zsh/site-functions"
+            elif [ -d "/usr/local/share/zsh/site-functions" ] && [ -w "/usr/local/share/zsh/site-functions" ]; then
+                COMP_DIR="/usr/local/share/zsh/site-functions"
+            else
+                COMP_DIR="${HOME}/.zsh/completions"
+            fi
+            COMP_FILE="${COMP_DIR}/_caddy-atc"
+            COMP_CMD="zsh"
+            ;;
+        bash)
+            if [ -d "/etc/bash_completion.d" ] && [ -w "/etc/bash_completion.d" ]; then
+                COMP_DIR="/etc/bash_completion.d"
+            else
+                COMP_DIR="${HOME}/.local/share/bash-completion/completions"
+            fi
+            COMP_FILE="${COMP_DIR}/caddy-atc"
+            COMP_CMD="bash"
+            ;;
+        fish)
+            COMP_DIR="${HOME}/.config/fish/completions"
+            COMP_FILE="${COMP_DIR}/caddy-atc.fish"
+            COMP_CMD="fish"
+            ;;
+        *)
+            echo ""
+            echo "Shell completions: run 'caddy-atc completion --help' to set up manually."
+            return
+            ;;
+    esac
+
+    mkdir -p "$COMP_DIR"
+    if "$CADDY_ATC" completion "$COMP_CMD" > "$COMP_FILE" 2>/dev/null; then
+        echo "Shell completions installed to ${COMP_FILE}"
+        echo "Restart your shell or open a new terminal to activate."
+    else
+        echo ""
+        echo "Shell completions: run 'caddy-atc completion ${COMP_CMD}' to set up manually."
+    fi
+}
+
+install_completions
+
 echo ""
 echo "Run 'caddy-atc --version' to verify."
