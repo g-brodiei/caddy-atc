@@ -74,7 +74,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	// 5. Generate stripped files
-	strippedFiles, err := GenerateStrippedFiles(composeFiles, opts.KeepPorts)
+	strippedFiles, err := GenerateStrippedFiles(composeFiles, opts.KeepPorts, false)
 	if err != nil {
 		return err
 	}

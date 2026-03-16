@@ -98,11 +98,24 @@ func DetectComposeFiles(dir string, composeFile string) ([]string, error) {
 }
 
 // GenerateStrippedFiles creates port-stripped copies of the given compose files.
+// If regenerate is false and the stripped file already exists, it is reused as-is.
 // Returns the paths to the stripped files in the same order.
-func GenerateStrippedFiles(originals []string, keepPorts []string) ([]string, error) {
+func GenerateStrippedFiles(originals []string, keepPorts []string, regenerate bool) ([]string, error) {
 	var stripped []string
 
 	for i, orig := range originals {
+		dir := filepath.Dir(orig)
+		name := strippedFilename(i, len(originals))
+		outPath := filepath.Join(dir, name)
+
+		// Skip generation if file exists and regenerate is not requested
+		if !regenerate {
+			if _, err := os.Stat(outPath); err == nil {
+				stripped = append(stripped, outPath)
+				continue
+			}
+		}
+
 		data, err := os.ReadFile(orig)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", orig, err)
@@ -112,10 +125,6 @@ func GenerateStrippedFiles(originals []string, keepPorts []string) ([]string, er
 		if err != nil {
 			return nil, fmt.Errorf("stripping ports from %s: %w", orig, err)
 		}
-
-		dir := filepath.Dir(orig)
-		name := strippedFilename(i, len(originals))
-		outPath := filepath.Join(dir, name)
 
 		if err := atomicWriteFile(outPath, out, 0644); err != nil {
 			return nil, fmt.Errorf("writing %s: %w", outPath, err)

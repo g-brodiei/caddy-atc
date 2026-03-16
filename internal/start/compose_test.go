@@ -91,7 +91,7 @@ func TestGenerateStrippedFiles(t *testing.T) {
 	original := filepath.Join(dir, "docker-compose.yml")
 	os.WriteFile(original, []byte(compose), 0644)
 
-	stripped, err := GenerateStrippedFiles([]string{original}, nil)
+	stripped, err := GenerateStrippedFiles([]string{original}, nil, false)
 	if err != nil {
 		t.Fatalf("GenerateStrippedFiles() error = %v", err)
 	}
@@ -123,7 +123,7 @@ func TestGenerateStrippedFiles_Override(t *testing.T) {
 		filepath.Join(dir, "docker-compose.yml"),
 		filepath.Join(dir, "docker-compose.override.yml"),
 	}
-	stripped, err := GenerateStrippedFiles(originals, nil)
+	stripped, err := GenerateStrippedFiles(originals, nil, false)
 	if err != nil {
 		t.Fatalf("GenerateStrippedFiles() error = %v", err)
 	}
@@ -175,6 +175,63 @@ func TestDetectComposeFiles_ExplicitFileMissing(t *testing.T) {
 	_, err := DetectComposeFiles(dir, "nonexistent.yml")
 	if err == nil {
 		t.Error("expected error when explicit file doesn't exist")
+	}
+}
+
+func TestGenerateStrippedFiles_SkipsExisting(t *testing.T) {
+	dir := t.TempDir()
+	compose := "services:\n  web:\n    image: nginx\n    ports:\n      - \"80:80\"\n"
+	original := filepath.Join(dir, "docker-compose.yml")
+	os.WriteFile(original, []byte(compose), 0644)
+
+	// Pre-create the stripped file with custom content
+	strippedPath := filepath.Join(dir, ".caddy-atc-compose.yml")
+	customContent := "services:\n  web:\n    image: mycustom:latest\n"
+	os.WriteFile(strippedPath, []byte(customContent), 0644)
+
+	stripped, err := GenerateStrippedFiles([]string{original}, nil, false)
+	if err != nil {
+		t.Fatalf("GenerateStrippedFiles() error = %v", err)
+	}
+
+	// Should return the existing file path
+	if len(stripped) != 1 || stripped[0] != strippedPath {
+		t.Fatalf("expected [%s], got %v", strippedPath, stripped)
+	}
+
+	// Content should be unchanged (custom content preserved)
+	data, _ := os.ReadFile(strippedPath)
+	if string(data) != customContent {
+		t.Errorf("file was overwritten, got:\n%s", string(data))
+	}
+}
+
+func TestGenerateStrippedFiles_RegenerateOverwrites(t *testing.T) {
+	dir := t.TempDir()
+	compose := "services:\n  web:\n    image: nginx\n    ports:\n      - \"80:80\"\n"
+	original := filepath.Join(dir, "docker-compose.yml")
+	os.WriteFile(original, []byte(compose), 0644)
+
+	// Pre-create the stripped file with custom content
+	strippedPath := filepath.Join(dir, ".caddy-atc-compose.yml")
+	os.WriteFile(strippedPath, []byte("services:\n  web:\n    image: mycustom:latest\n"), 0644)
+
+	stripped, err := GenerateStrippedFiles([]string{original}, nil, true)
+	if err != nil {
+		t.Fatalf("GenerateStrippedFiles() error = %v", err)
+	}
+
+	if len(stripped) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(stripped))
+	}
+
+	// Content should be regenerated (ports stripped from original)
+	data, _ := os.ReadFile(stripped[0])
+	if strings.Contains(string(data), "ports:") {
+		t.Error("regenerated file still contains ports:")
+	}
+	if strings.Contains(string(data), "mycustom") {
+		t.Error("regenerated file still has custom content — was not overwritten")
 	}
 }
 
