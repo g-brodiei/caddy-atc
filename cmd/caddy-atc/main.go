@@ -19,6 +19,7 @@ import (
 	"github.com/g-brodiei/caddy-atc/internal/gateway"
 	"github.com/g-brodiei/caddy-atc/internal/routes"
 	"github.com/g-brodiei/caddy-atc/internal/start"
+	"github.com/g-brodiei/caddy-atc/internal/update"
 	"github.com/g-brodiei/caddy-atc/internal/watcher"
 	"github.com/spf13/cobra"
 )
@@ -26,11 +27,24 @@ import (
 var version = "dev"
 
 func main() {
+	updateCh := update.CheckAsync(version)
+
 	rootCmd := &cobra.Command{
 		Use:     "caddy-atc",
 		Short:   "Local development gateway - route projects by hostname",
 		Long:    "caddy-atc eliminates Docker port conflicts by routing HTTP traffic through a single Caddy gateway using hostname-based routing (project.localhost).",
 		Version: version,
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			select {
+			case result := <-updateCh:
+				if result != nil && result.UpdateAvail {
+					fmt.Fprintf(os.Stderr, "\nUpdate available: %s → %s (run 'caddy-atc update' to upgrade)\n",
+						result.CurrentVersion, result.LatestVersion)
+				}
+			default:
+				// Check not finished yet, don't block
+			}
+		},
 	}
 
 	rootCmd.AddCommand(upCmd())
@@ -43,6 +57,7 @@ func main() {
 	rootCmd.AddCommand(logsCmd())
 	rootCmd.AddCommand(startCmd())
 	rootCmd.AddCommand(stopProjectCmd())
+	rootCmd.AddCommand(updateCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -376,6 +391,34 @@ func stopProjectCmd() *cobra.Command {
 				dir = args[0]
 			}
 			return start.Stop(cmd.Context(), dir)
+		},
+	}
+}
+
+func updateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "update",
+		Short: "Update caddy-atc to the latest version",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if version == "dev" {
+				return fmt.Errorf("cannot update a development build (built from source without version tag)")
+			}
+
+			fmt.Printf("Current version: %s\n", version)
+			fmt.Println("Checking for updates...")
+
+			result := update.CheckSync(version)
+			if result == nil {
+				return fmt.Errorf("could not check for updates (network error?)")
+			}
+
+			if !result.UpdateAvail {
+				fmt.Printf("Already up to date (%s)\n", version)
+				return nil
+			}
+
+			fmt.Printf("New version available: %s\n\n", result.LatestVersion)
+			return update.SelfUpdate(result.LatestVersion)
 		},
 	}
 }
