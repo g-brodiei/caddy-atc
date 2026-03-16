@@ -311,6 +311,7 @@ func logsCmd() *cobra.Command {
 func startCmd() *cobra.Command {
 	var keepPorts string
 	var composeFile string
+	var regenerate bool
 
 	cmd := &cobra.Command{
 		Use:   "start [directory] [-- command...]",
@@ -352,12 +353,14 @@ Examples:
 				KeepPorts:   keepPortsList,
 				Command:     userCmd,
 				ComposeFile: composeFile,
+				Regenerate:  regenerate,
 			})
 		},
 	}
 
 	cmd.Flags().StringVar(&keepPorts, "keep-ports", "", "Comma-separated service names to keep host port bindings (e.g. db,redis)")
 	cmd.Flags().StringVarP(&composeFile, "file", "f", "", "Path to docker-compose file (default: auto-detect or use saved config)")
+	cmd.Flags().BoolVar(&regenerate, "regenerate", false, "Force regeneration of stripped compose file (overwrites customizations)")
 
 	return cmd
 }
@@ -365,7 +368,7 @@ Examples:
 func stopProjectCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop [directory]",
-		Short: "Stop project containers and clean up stripped compose files",
+		Short: "Stop project containers",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

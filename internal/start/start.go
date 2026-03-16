@@ -20,6 +20,7 @@ type Options struct {
 	KeepPorts   []string // Service names whose ports should be kept
 	Command     []string // User command to run (nil = docker compose up -d)
 	ComposeFile string   // Explicit compose file path (empty = auto-detect or use saved config)
+	Regenerate  bool     // Force regeneration of stripped compose files
 }
 
 // Run executes the start workflow: auto-adopt, ensure gateway, strip ports, exec command.
@@ -73,13 +74,34 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	// Check which stripped files already exist (for logging)
+	existedBefore := make(map[string]bool)
+	if !opts.Regenerate {
+		for i := range composeFiles {
+			name := strippedFilename(i, len(composeFiles))
+			outPath := filepath.Join(absDir, name)
+			if _, err := os.Stat(outPath); err == nil {
+				existedBefore[outPath] = true
+			}
+		}
+	}
+
 	// 5. Generate stripped files
-	strippedFiles, err := GenerateStrippedFiles(composeFiles, opts.KeepPorts)
+	strippedFiles, err := GenerateStrippedFiles(composeFiles, opts.KeepPorts, opts.Regenerate)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Generated %s (ports stripped)\n", filepath.Base(strippedFiles[0]))
+	for _, sf := range strippedFiles {
+		base := filepath.Base(sf)
+		if opts.Regenerate {
+			fmt.Printf("Regenerated %s (ports stripped)\n", base)
+		} else if existedBefore[sf] {
+			fmt.Printf("Using existing %s\n", base)
+		} else {
+			fmt.Printf("Generated %s (ports stripped)\n", base)
+		}
+	}
 
 	// 6. Build environment with COMPOSE_FILE pointing to stripped files
 	composeFileEnv := BuildComposeFileEnv(strippedFiles)
@@ -179,10 +201,6 @@ func Stop(ctx context.Context, dir string) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker compose down: %w", err)
 	}
-
-	os.Remove(strippedPath)
-	os.Remove(overridePath)
-	fmt.Println("Stripped compose files cleaned up.")
 
 	return nil
 }

@@ -42,6 +42,16 @@ make build
 # Binary is at ./build/caddy-atc
 ```
 
+### Shell Completions
+
+Tab completions are installed automatically by the install script. For source installs:
+
+```bash
+make install-completions
+```
+
+Supports zsh, bash, and fish. Restart your shell after installing.
+
 ## How It Works
 
 1. A single Caddy container (`caddy-atc`) binds ports 80/443 on the host
@@ -87,7 +97,7 @@ docker compose up -d
 | `caddy-atc routes` | List all active routes |
 | `caddy-atc trust` | Install Caddy's root CA in system trust store |
 | `caddy-atc start [dir] [-f file] [-- cmd]` | Start project with ports stripped |
-| `caddy-atc stop [dir]` | Stop project and clean up stripped files |
+| `caddy-atc stop [dir]` | Stop project containers |
 | `caddy-atc logs [-f]` | Show (or follow) watcher logs |
 
 ### Starting Projects
@@ -99,10 +109,13 @@ caddy-atc start                              # docker compose up -d (default)
 caddy-atc start -- ./scripts/dev.sh          # custom start script
 caddy-atc start --keep-ports db,redis        # keep host ports for specific services
 caddy-atc start -f docker-compose.demo.yaml  # use a custom compose file
-caddy-atc stop                               # stop and clean up
+caddy-atc start --regenerate                 # force-regenerate stripped compose file
+caddy-atc stop                               # stop containers
 ```
 
 This strips all host port bindings from the compose file and sets `COMPOSE_FILE` so any `docker compose` calls in your script use the stripped version. Add `.caddy-atc-compose*.yml` to your `.gitignore`.
+
+The stripped compose file (`.caddy-atc-compose.yml`) is only generated on the first run. After that, it's yours to customize — change images, build args, service configs, etc. Your edits are preserved across `caddy-atc start` and `caddy-atc stop`. Use `--regenerate` to recreate it from the source compose file when needed.
 
 ### Custom Compose Files
 
