@@ -27,6 +27,10 @@ install-completions: build
 			mkdir -p "$$COMP_DIR"; \
 			$(BUILD_DIR)/$(BINARY_NAME) completion zsh > "$$COMP_DIR/_caddy-atc"; \
 			echo "Zsh completions installed to $$COMP_DIR/_caddy-atc"; \
+			if [ "$$COMP_DIR" = "$(HOME)/.zsh/completions" ] && [ -f "$(HOME)/.zshrc" ] && ! grep -q '\.zsh/completions' "$(HOME)/.zshrc" 2>/dev/null; then \
+				printf '\n# caddy-atc completions\nfpath=(~/.zsh/completions $$fpath)\nautoload -Uz compinit && compinit\n' >> "$(HOME)/.zshrc"; \
+				echo "Added ~/.zsh/completions to fpath in ~/.zshrc"; \
+			fi; \
 			;; \
 		bash) \
 			if [ -d "/etc/bash_completion.d" ] && [ -w "/etc/bash_completion.d" ]; then \
