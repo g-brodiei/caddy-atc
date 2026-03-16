@@ -112,6 +112,24 @@ func TestAssignHostnames(t *testing.T) {
 		}
 	})
 
+	t.Run("wildcard primary, others get stripped prefix", func(t *testing.T) {
+		services := []ComposeService{
+			{Name: "caddy", Image: "caddy:2", Port: "80", IsHTTP: true},
+			{Name: "client", Image: "node:18", Port: "3000", IsHTTP: true},
+			{Name: "server", Image: "node:18", Port: "3001", IsHTTP: true},
+		}
+		hostnames := assignHostnames(services, "*.curate.localhost")
+		if hostnames["caddy"] != "*.curate.localhost" {
+			t.Errorf("caddy hostname = %q, want %q", hostnames["caddy"], "*.curate.localhost")
+		}
+		if hostnames["client"] != "client.curate.localhost" {
+			t.Errorf("client hostname = %q, want %q", hostnames["client"], "client.curate.localhost")
+		}
+		if hostnames["server"] != "server.curate.localhost" {
+			t.Errorf("server hostname = %q, want %q", hostnames["server"], "server.curate.localhost")
+		}
+	})
+
 	t.Run("single service gets base", func(t *testing.T) {
 		services := []ComposeService{
 			{Name: "app", Image: "node:18", Port: "3000", IsHTTP: true},

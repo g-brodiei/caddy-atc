@@ -133,12 +133,17 @@ func assignHostnames(services []ComposeService, baseHostname string) map[string]
 	// Find the "primary" service - one that maps to base hostname
 	primaryIdx := FindPrimaryService(services)
 
+	// For non-primary services, strip wildcard prefix if present
+	subBase := baseHostname
+	if strings.HasPrefix(subBase, "*.") {
+		subBase = subBase[2:]
+	}
+
 	for i, svc := range services {
 		if i == primaryIdx {
 			hostnames[svc.Name] = baseHostname
 		} else {
-			prefix := svc.Name
-			hostnames[svc.Name] = prefix + "." + baseHostname
+			hostnames[svc.Name] = svc.Name + "." + subBase
 		}
 	}
 

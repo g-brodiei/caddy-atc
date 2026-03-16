@@ -19,6 +19,7 @@ const maxConfigFileSize = 1 << 20 // 1 MB
 var validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 
 // ValidateHostname checks that a hostname is safe to interpolate into a Caddyfile.
+// Accepts an optional "*." wildcard prefix (e.g., "*.curate.localhost").
 func ValidateHostname(s string) error {
 	if s == "" {
 		return fmt.Errorf("hostname cannot be empty")
@@ -26,8 +27,12 @@ func ValidateHostname(s string) error {
 	if len(s) > 253 {
 		return fmt.Errorf("hostname too long: %d chars (max 253)", len(s))
 	}
-	if !validName.MatchString(s) {
-		return fmt.Errorf("invalid hostname %q: must match [a-zA-Z0-9][a-zA-Z0-9._-]*", s)
+	check := s
+	if strings.HasPrefix(s, "*.") {
+		check = s[2:]
+	}
+	if !validName.MatchString(check) {
+		return fmt.Errorf("invalid hostname %q: must match [a-zA-Z0-9][a-zA-Z0-9._-]* (optionally prefixed with *.)", s)
 	}
 	return nil
 }
@@ -247,11 +252,17 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 }
 
 // ResolveHostname returns the hostname for a service within a project.
+// For wildcard hostnames (e.g., "*.curate.localhost"), subservices get
+// the base without the wildcard prefix (e.g., "client.curate.localhost").
 func (p *ProjectConfig) ResolveHostname(serviceName string) string {
 	if hostname, ok := p.Services[serviceName]; ok {
 		return hostname
 	}
-	return serviceName + "." + p.Hostname
+	base := p.Hostname
+	if strings.HasPrefix(base, "*.") {
+		base = base[2:]
+	}
+	return serviceName + "." + base
 }
 
 // FilterEnv returns os.Environ() with any existing key=... entries for the
