@@ -154,6 +154,16 @@ install_completions() {
     mkdir -p "$COMP_DIR"
     if "$CADDY_ATC" completion "$COMP_CMD" > "$COMP_FILE" 2>/dev/null; then
         echo "Shell completions installed to ${COMP_FILE}"
+
+        # Ensure ~/.zsh/completions is in fpath for zsh user-local installs
+        if [ "$COMP_CMD" = "zsh" ] && [ "$COMP_DIR" = "${HOME}/.zsh/completions" ]; then
+            ZSHRC="${HOME}/.zshrc"
+            if [ -f "$ZSHRC" ] && ! grep -q '\.zsh/completions' "$ZSHRC" 2>/dev/null; then
+                printf '\n# caddy-atc completions\nfpath=(~/.zsh/completions $fpath)\nautoload -Uz compinit && compinit\n' >> "$ZSHRC"
+                echo "Added ~/.zsh/completions to fpath in ~/.zshrc"
+            fi
+        fi
+
         echo "Restart your shell or open a new terminal to activate."
     else
         echo ""
